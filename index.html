@@ -1,0 +1,348 @@
+<html>
+<head>
+<title>Private Docker Registry UI</title>
+<style>
+body {
+    font-family:  "Helvetica Neue",Helvetica,Arial,sans-serif;
+    font-size: 16px;
+    color: #333;
+}
+.on{
+    background-color: #d9edf7;
+}
+
+.btn {
+    border-color: #245580;
+    text-shadow: 0 -1px 0 rgba(0,0,0,.2);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.15),0 1px 1px rgba(0,0,0,.075);
+    color: #fff;
+    background-color: #337ab7;
+    text-align: center;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    margin: 3;
+    height: 30px;;
+    width: 70px;
+    font-size: 16px;
+}
+.title{
+    background-color: #dff0d8;
+}
+
+.btn-delete{
+    background-color: #d9534f;
+    border-color: #d43f3a
+    display: inline;
+    float: right;
+}
+
+.label{
+    /* text-align: right: */
+    padding: 2 2 2 2;
+    margin: 2 2 2 2;
+}
+
+.result{
+    cursor: pointer;
+    padding: 4;
+    margin:4;
+    height: 20px;
+    display: inline;
+    float: left;
+}
+.input {
+    display: inline-block;
+}
+
+.text{
+    border-top-left-radius:0;
+    border-bottom-left-radius: 0;
+    width:340px;
+    vertical-align: middle;
+    height: 32px;
+    padding: 3px 12px;
+    color: #555;
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-radius:4px;
+}
+.info{
+    padding: 10 10 10 10
+    width: 1024px;
+    align: middle;
+}
+
+.container{
+    padding: 20px 40px;
+}
+
+.row{
+    display: inline-block;
+    /* border: 1px solid #aaa; */
+    float: left;
+    padding: 10 30 0 5;
+}
+
+</style>
+</head>
+<body onload="parse_url()">
+<div class="info">
+    <div class="input">
+        <p  class="label">registry address (with protocol)</p>
+        <input id="repo" name="repo" type=text class="text"  placeholder="server name/IP with port"/>
+    </div>
+    <div class="input">
+        <p class="label">search</p>
+        <input id="search" name="search" type=text class="text" placeholder="search keyword"/>
+        <button class="btn" onclick="refresh_repo()">refresh </button>
+    </div>
+</div>
+<div class="info">
+    <div class="input">
+        <p  class="label">username (optional)</p>
+        <input id="username"  type=text class="text"  placeholder="username"/>
+    </div>
+    <div class="input">
+        <p class="label">password (optional)</p>
+        <input id="password" type=password class="text" placeholder="password"/>
+    </div>
+</div>
+<div class="container">
+    <div class="row">
+        <div id="repository-list" ></div>
+    </div>
+    <div class="row">
+        <div id="tags-list"></div>
+    </div>
+    <div  class="row">
+        <pre id="ancestry-list"/>
+    </div>
+</div>
+<script type="text/javascript" charset="utf-8">
+var current_repo="";
+
+
+function clear_detail(){
+ document.getElementById("ancestry-list").innerHTML="";
+}
+
+function clear_tag(){
+    clear_detail();
+    document.getElementById("tags-list").innerHTML="";
+
+}
+function base_url(){
+    var url = document.getElementById("repo").value;
+    url.replace(/\/*$/,"");
+    return url + "/v1";
+}
+
+function refresh_repo(){
+    clear_detail();
+    clear_tag();
+    var search = document.getElementById("search").value;
+    url = base_url() + "/search" + (search == ""?"":"?q="+search);
+    show_repo(url);
+}
+
+function tag_click(){
+    clear_detail();
+    prevs = document.getElementById("tags-list").querySelectorAll(".on");
+    if (prevs != null){
+        for(var i = 0; i < prevs.length; i++){
+            switch_class(prevs[i], "on");
+        }
+    }
+    switch_class(this, "on");
+    ajax_call("GET", base_url() + "/images/"+this.name+"/json",function go(data){
+            document.getElementById("ancestry-list").innerHTML=(JSON.stringify(data,undefined, 2));
+            });
+}
+
+function switch_class(item, klass){
+    var t = item.className;
+    klass = klass.replace(/^\s*/,"").replace(/\s*$/,"");
+    if(t.indexOf(klass)!=-1){
+        item.className=t.replace(klass,"");
+    }else{
+        item.className=t+" "+klass;
+    }
+}
+
+function repo_click(){
+    clear_tag();
+    prevs = document.getElementById("repository-list").querySelectorAll(".on");
+    if (prevs != null){
+        for(var i = 0; i < prevs.length; i++){
+            switch_class(prevs[i], "on");
+        }
+    }
+    current_repo = this.name;
+    switch_class(this,"on");
+    show_tags(base_url() + "/repositories/"+this.name+"/tags");
+}
+
+function build_tags(data){
+    var ret = document.createElement("div");
+    var header = document.createElement("div");
+    header.innerHTML=" for repository: "+ current_repo;
+    header.className="title";
+    ret.appendChild(header);
+    for(var t in data){
+        var holder= document.createElement("div");
+        var item = document.createElement("div");
+        item.innerHTML= t + " : " + data[t];
+        item.name = data[t];
+        item.className="result";
+        item.onclick=tag_click;
+        var btn = document.createElement("button");
+        btn.className="btn btn-delete";
+        btn.innerHTML="delete";
+        btn.name=t;
+        btn.onclick=delete_tag;
+        holder.appendChild(item);
+        holder.appendChild(btn);
+        ret.appendChild(holder);
+    }
+    if(ret.childNodes.length == 1){
+        var item = document.createElement("div");
+        item.innerHTML= "no  tag was found";
+        item.className="label";
+        ret.appendChild(item);
+    }
+    return ret;
+}
+
+function delete_repo(){
+    if(window.confirm("are you sure to delete repository: " + this.name +",\n like 100% sure?")){
+        var toremove=this.parentNode;
+        ajax_call("DELETE",base_url() + "/repositories/"+this.name + "/", function go(){
+                clear_tag();
+            toremove.remove();
+                });
+    }
+}
+
+function delete_tag(){
+    if(window.confirm("are you sure to delete tag: " + this.name + "?\n like 100% sure?")){
+        var toremove=this.parentNode;
+        ajax_call("DELETE", base_url() + "/repositories/"+current_repo+"/tags/"+this.name, function go(){
+                clear_detail();
+                toremove.remove();
+                });
+    }
+}
+
+function build_repo(data){
+    var ret = document.createElement("div");
+    if (! "results" in data || data["results"].length==0){
+        var item = document.createElement("div");
+        item.innerHTML= "no data found";
+        item.className="label";
+        ret.appendChild(item);
+        return ret;
+    }
+    todolist = data["results"].sort(function(a,b){return a["name"] > b["name"]})
+    for(var i=0;i<todolist.length;i++){
+        var re=todolist[i];
+        var holder= document.createElement("div");
+        var item = document.createElement("div");
+        item.innerHTML= re["name"] + (re["description"] == "" || re["description"] == null ? "": " : ("+ re["description"]+")");
+        item.name=re["name"];
+        item.className="result";
+        item.onclick=repo_click;
+        var btn = document.createElement("button");
+        btn.className="btn btn-delete";
+        btn.innerHTML="delete";
+        btn.name=re["name"];
+        btn.onclick=delete_repo;
+
+        holder.appendChild(item);
+        holder.appendChild(btn);
+        ret.appendChild(holder);
+    }
+    return ret;
+}
+
+function show_tags(url){
+    ajax_call("GET",url, function go(data){
+            var target = document.getElementById("tags-list");
+            for(var i = 0; i < target.children.length; i++){
+            target.removeChild(target.children[0]);
+            }
+            target.insertBefore(build_tags(data),null);
+            });
+}
+
+function show_repo(url){
+    ajax_call("GET",url,function go(data){
+            var target = document.getElementById("repository-list");
+            for(var i = 0; i < target.children.length; i++){
+            target.removeChild(target.children[0]);
+            }
+            target.insertBefore(build_repo(data),null);
+            })
+}
+
+
+function ajax_call(method, url, success_function){
+    var httpRequest = new XMLHttpRequest();
+    httpRequest.onreadystatechange=function changed(){
+        if (httpRequest.readyState === 4){
+            if (httpRequest.status === 200){
+                success_function(JSON.parse(this.responseText));
+            }
+            else if (httpRequest.status === 0){
+                alert("error: make sure you have CORS enabled");
+            }
+            else{
+                alert("error: " + this.status + " " + this.statusText);
+            }
+        }
+    }
+    var username = document.getElementById("username").value;
+    var password = document.getElementById("password").value;
+    if( username !="" && password != ""){
+        httpRequest.open(method, url, true, username, password);
+        httpRequest.withCredentials=true;
+    }
+    else{
+        httpRequest.open(method, url, true);
+    }
+    httpRequest.send();
+};
+
+function get_query_variable(data) {
+    var vars = window.location.search.substring(1).split('&');
+    for (var i = 0; i < vars.length; i++) {
+        var p = vars[i].split('=');
+        if (decodeURIComponent(p[0]) == data) {
+            return decodeURIComponent(p[1]);
+        }
+    }
+    return "";
+};
+
+
+function parse_url(key){
+    var repo = get_query_variable("repo");
+    if(repo != ""){
+        document.getElementById("repo").value= repo;
+    }else{
+        document.getElementById("repo").value=window.location;
+    }
+
+    var username= get_query_variable("username");
+    if(username !=""){
+        document.getElementById("username").value=username;
+    }
+    var search= get_query_variable("search");
+    if(search !=""){
+        document.getElementById("search").value=search;
+    }
+    document.onkeypress=function(e){if(e.keyCode==13){refresh_repo();}}
+};
+</script>
+</body>
+</html>
