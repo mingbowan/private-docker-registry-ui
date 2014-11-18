@@ -21,4 +21,5 @@ to bookmark the page, you can put parameters repo, username and/or search keywor
 ```
 http://myrepo.myorg.com/index.html?repo=http://myrealrepo.myorg.com:5000&search=mylib&username=IamRoot
 ```
-
+### screenshot
+![Screenshot](https://raw.github.com/mingbowan/private-docker-registry-ui/master/screenshot.PNG)
