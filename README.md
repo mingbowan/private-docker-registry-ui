@@ -14,8 +14,10 @@ a really simple (and ugly) docker private registry viewer
 it's just a single HTML file, copy it to you web server and make it accessible
 
 ## configure
-if you put on the same server as your docker registry, then no configuration needed
-if you put on server other than your docker registry, you need to enable CORS support (not suggested), your docker registry software should have related info
+if you put the file on the same server (that is, be able to access the file using same DNS name) as your docker registry, then no configuration needed
+
+if you put the file on a server other than your docker registry, you need to enable CORS support (not suggested), your docker registry software should have related info
+
 to bookmark the page, you can put parameters repo, username and/or search keyword (any combination) like:
 
 ```
