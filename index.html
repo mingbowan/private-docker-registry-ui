@@ -120,8 +120,8 @@ body {
     </div>
 </div>
 <script type="text/javascript" charset="utf-8">
+// global var, to remember current repo name
 var current_repo="";
-
 
 function clear_detail(){
  document.getElementById("ancestry-list").innerHTML="";
@@ -132,6 +132,8 @@ function clear_tag(){
     document.getElementById("tags-list").innerHTML="";
 
 }
+
+// clean up possbile / at the end of repo URL
 function base_url(){
     var url = document.getElementById("repo").value;
     url.replace(/\/*$/,"");
@@ -139,48 +141,45 @@ function base_url(){
 }
 
 function refresh_repo(){
-    clear_detail();
     clear_tag();
     var search = document.getElementById("search").value;
     url = base_url() + "/search" + (search == ""?"":"?q="+search);
-    show_repo(url);
+    show(url,"repository-list", build_repo);
 }
 
-function tag_click(){
-    clear_detail();
-    prevs = document.getElementById("tags-list").querySelectorAll(".on");
-    if (prevs != null){
-        for(var i = 0; i < prevs.length; i++){
-            switch_class(prevs[i], "on");
-        }
-    }
-    switch_class(this, "on");
-    ajax_call("GET", base_url() + "/images/"+this.name+"/json",function go(data){
-            document.getElementById("ancestry-list").innerHTML=(JSON.stringify(data,undefined, 2));
-            });
-}
-
-function switch_class(item, klass){
-    var t = item.className;
-    klass = klass.replace(/^\s*/,"").replace(/\s*$/,"");
-    if(t.indexOf(klass)!=-1){
-        item.className=t.replace(klass,"");
-    }else{
-        item.className=t+" "+klass;
+function switch_batch(name, klass){
+    var target = document.getElementById(name).querySelectorAll("."+klass);
+    for(var i=0;i< target.length; i++){
+            switch_class(target[i],klass);
     }
 }
 
 function repo_click(){
     clear_tag();
-    prevs = document.getElementById("repository-list").querySelectorAll(".on");
-    if (prevs != null){
-        for(var i = 0; i < prevs.length; i++){
-            switch_class(prevs[i], "on");
-        }
-    }
+    switch_batch("repository-list","on")
     current_repo = this.name;
     switch_class(this,"on");
-    show_tags(base_url() + "/repositories/"+this.name+"/tags");
+    show(base_url() + "/repositories/"+this.name+"/tags", "tags-list", build_tags );
+}
+
+
+function tag_click(){
+    clear_detail();
+    switch_batch("tags-list","on");
+    switch_class(this, "on");
+    ajax_call("GET", base_url() + "/images/"+this.name+"/json",function go(data){
+            document.getElementById("ancestry-list").innerHTML=(JSON.stringify(data,undefined, 2));
+            });
+}
+
+function switch_class(item, klass){
+    var t = item.className;
+    klass = klass.replace(/\s*/,"");
+    if(t.indexOf(klass)!=-1){
+        item.className=t.replace(klass,"");
+    }else{
+        item.className=t+" "+klass;
+    }
 }
 
 function build_tags(data){
@@ -204,7 +203,7 @@ function build_tags(data){
         holder.appendChild(item);
         holder.appendChild(btn);
         ret.appendChild(holder);
-    }
+    };
     if(ret.childNodes.length == 1){
         var item = document.createElement("div");
         item.innerHTML= "no  tag was found";
@@ -243,9 +242,8 @@ function build_repo(data){
         ret.appendChild(item);
         return ret;
     }
-    todolist = data["results"].sort(function(a,b){return a["name"] > b["name"]})
-    for(var i=0;i<todolist.length;i++){
-        var re=todolist[i];
+    todolist = data["results"].sort(function(a,b){return a["name"] > b["name"]});
+    for(var re of todolist){
         var holder= document.createElement("div");
         var item = document.createElement("div");
         item.innerHTML= re["name"] + (re["description"] == "" || re["description"] == null ? "": " : ("+ re["description"]+")");
@@ -261,40 +259,27 @@ function build_repo(data){
         holder.appendChild(item);
         holder.appendChild(btn);
         ret.appendChild(holder);
-    }
+    };
     return ret;
 }
 
-function show_tags(url){
+function show(url, target_name, func){
     ajax_call("GET",url, function go(data){
-            var target = document.getElementById("tags-list");
-            for(var i = 0; i < target.children.length; i++){
-            target.removeChild(target.children[0]);
-            }
-            target.insertBefore(build_tags(data),null);
+            var target = document.getElementById(target_name);
+            target.innerHTML="";
+            target.insertBefore(func(data),null);
             });
 }
-
-function show_repo(url){
-    ajax_call("GET",url,function go(data){
-            var target = document.getElementById("repository-list");
-            for(var i = 0; i < target.children.length; i++){
-            target.removeChild(target.children[0]);
-            }
-            target.insertBefore(build_repo(data),null);
-            })
-}
-
 
 function ajax_call(method, url, success_function){
     var httpRequest = new XMLHttpRequest();
     httpRequest.onreadystatechange=function changed(){
         if (httpRequest.readyState === 4){
             if (httpRequest.status === 200){
-                success_function(JSON.parse(this.responseText));
+                success_function(JSON.parse(httpRequest.responseText));
             }
             else if (httpRequest.status === 0){
-                alert("error: make sure you have CORS enabled");
+                alert("error:\nmake sure you have CORS enabled\nmake sure you do not open this file locally\nmake sure you input correct repo address (with protocal like http/https)");
             }
             else{
                 alert("error: " + this.status + " " + this.statusText);
@@ -326,13 +311,11 @@ function get_query_variable(data) {
 
 
 function parse_url(key){
+    // set initial values based on URL
     var repo = get_query_variable("repo");
     if(repo != ""){
         document.getElementById("repo").value= repo;
-    }else{
-        document.getElementById("repo").value=window.location;
     }
-
     var username= get_query_variable("username");
     if(username !=""){
         document.getElementById("username").value=username;
@@ -341,8 +324,13 @@ function parse_url(key){
     if(search !=""){
         document.getElementById("search").value=search;
     }
-    document.onkeypress=function(e){if(e.keyCode==13){refresh_repo();}}
+    // press enter within text input will refresh repo
+    inputs = document.querySelectorAll("input[type=text]")
+    for(var i=0;i<inputs.length;i++){
+        inputs[i].onkeypress=function(e){if(e.keyCode==13){refresh_repo();}};
+    }
 };
+
 </script>
 </body>
 </html>
